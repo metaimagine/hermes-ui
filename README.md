@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# hermes-ui
 
-## Getting Started
+Independent management-first web UI for Hermes Agent.
 
-First, run the development server:
+This project is intentionally separate from the official Hermes repository. It is designed as a local operator cockpit first, with chat as a secondary surface.
+
+Current goals:
+- management-first dashboard
+- structured config editing instead of raw YAML by default
+- session browsing and inspection
+- memory / skills / cron / approvals visibility
+- bilingual UI (中文 / English)
+- dark / light themes
+
+## Status
+
+Work in progress, but already functional.
+
+Implemented pages:
+- Dashboard
+- Config
+- Sessions
+- Memory
+- Skills
+- Cron
+- Approvals
+- Chat
+
+## Tech stack
+
+- Next.js
+- React
+- TypeScript
+- react-hook-form
+
+## Local development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd ~/Projects/hermes-ui
+npm install
+npm run dev -- --hostname 127.0.0.1 --port 3007
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open:
+- http://127.0.0.1:3007/dashboard
+- http://127.0.0.1:3007/config
+- http://127.0.0.1:3007/sessions
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Data sources
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This UI reads from your local Hermes installation and local Hermes CLI.
 
-## Learn More
+Examples:
+- `~/.hermes/config.yaml`
+- `~/.hermes/sessions/sessions.json`
+- `~/.hermes/memories/USER.md`
+- `~/.hermes/pairing/*.json`
+- `~/.hermes/skills/`
+- `hermes cron status`
+- `hermes cron list`
+- `hermes chat -q ...`
 
-To learn more about Next.js, take a look at the following resources:
+## Product direction
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+This project currently follows these principles:
+- operator console first
+- safer structured config editing first
+- raw YAML only as an advanced path
+- local-first, no-auth default
+- real browser-based UI/UX audit loop before publishing
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Known limitations
 
-## Deploy on Vercel
+- Config editing only covers the most common fields in structured form today.
+- Advanced YAML is still needed for unsupported settings.
+- Sessions page is still early and needs richer triage actions.
+- Cron and approvals pages are visibility-first, not full workflow consoles yet.
+- No authentication layer yet; local-only usage is assumed.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Near-term roadmap
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- stronger field validation and save feedback in Config
+- richer triage actions in Sessions
+- better anomaly explanation and operational severity modeling
+- more complete operator workflows for Cron / Approvals / Memory
+- GitHub release once UI passes repeated audit loops
