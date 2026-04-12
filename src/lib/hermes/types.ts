@@ -90,8 +90,30 @@ export type CronSnapshot = {
   artifactFiles: string[];
 };
 
+export type ChatRequest = {
+  prompt: string;
+  imagePath?: string;
+  model?: string;
+  toolsets?: string;
+  skills?: string;
+  provider?: string;
+  verbose?: boolean;
+  quiet?: boolean;
+  resumeSessionId?: string;
+  continueSessionName?: string;
+  worktree?: boolean;
+  checkpoints?: boolean;
+  maxTurns?: number;
+  yolo?: boolean;
+  passSessionId?: boolean;
+  source?: string;
+};
+
 export type ChatResponse = {
   stdout: string;
   stderr: string;
   exitCode: number;
+  finalText: string;
+  sessionId?: string;
+  commandArgs: string[];
 };

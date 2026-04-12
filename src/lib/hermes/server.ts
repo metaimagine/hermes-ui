@@ -13,6 +13,7 @@ import type {
   OverviewData,
   SessionRecord,
   SkillsSnapshot,
+  ChatRequest,
   ChatResponse,
 } from "./types";
 
@@ -238,9 +239,104 @@ export async function getCronSnapshot(): Promise<CronSnapshot> {
   };
 }
 
-export async function runLocalChat(query: string): Promise<ChatResponse> {
-  const result = await runHermes(["chat", "-q", query, "-Q", "--source", "tool"]);
-  return result;
+function buildChatArgs(request: ChatRequest) {
+  const args = ["chat"] as string[];
+
+  if (request.resumeSessionId?.trim()) {
+    args.push("--resume", request.resumeSessionId.trim());
+  } else if (typeof request.continueSessionName === "string") {
+    const value = request.continueSessionName.trim();
+    args.push("--continue");
+    if (value) {
+      args.push(value);
+    }
+  }
+
+  args.push("-q", request.prompt.trim());
+
+  if (request.imagePath?.trim()) args.push("--image", request.imagePath.trim());
+  if (request.model?.trim()) args.push("--model", request.model.trim());
+  if (request.toolsets?.trim()) args.push("--toolsets", request.toolsets.trim());
+  if (request.skills?.trim()) args.push("--skills", request.skills.trim());
+  if (request.provider?.trim()) args.push("--provider", request.provider.trim());
+  if (request.verbose) args.push("--verbose");
+  if (request.quiet !== false) args.push("--quiet");
+  if (request.worktree) args.push("--worktree");
+  if (request.checkpoints) args.push("--checkpoints");
+  if (typeof request.maxTurns === "number" && Number.isFinite(request.maxTurns) && request.maxTurns > 0) {
+    args.push("--max-turns", String(Math.trunc(request.maxTurns)));
+  }
+  if (request.yolo) args.push("--yolo");
+  if (request.passSessionId) args.push("--pass-session-id");
+  args.push("--source", request.source?.trim() || "tool");
+
+  return args;
+}
+
+function stripAnsi(text: string) {
+  return text.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "");
+}
+
+function collapseRepeatedPrefix(lines: string[]) {
+  const trimmed = [...lines];
+  for (let size = Math.floor(trimmed.length / 2); size >= 3; size -= 1) {
+    const first = trimmed.slice(0, size).join("\n");
+    const second = trimmed.slice(size, size * 2).join("\n");
+    if (first && first === second) {
+      return trimmed.slice(size);
+    }
+  }
+  return trimmed;
+}
+
+function normalizeChatOutput(stdout: string) {
+  const normalized = stripAnsi(stdout).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const sessionMatch = normalized.match(/(?:^|\n)session_id:\s*([^\s]+)\s*$/m);
+  const sessionId = sessionMatch?.[1];
+  const withoutSession = normalized.replace(/(?:^|\n)session_id:\s*([^\s]+)\s*$/gm, "").trim();
+  const filteredLines = collapseRepeatedPrefix(
+    withoutSession
+      .split("\n")
+      .map((line) => line.trimEnd())
+      .filter((line) => line.trim())
+      .filter((line) => !/^\s*[╭╰│─].*$/.test(line))
+      .filter((line) => !/^\s*⚕\s+Hermes.*$/.test(line))
+      .filter((line) => !/^\s*⚠️\s+DANGEROUS COMMAND:/.test(line))
+      .filter((line) => !/^\s*Choice \[o\/s\/a\/D\]:/.test(line))
+      .filter((line) => !/^\s*\[o\]nce\s+\|/.test(line))
+      .filter((line) => !/^\s*⏱\s+Timeout - denying command/.test(line))
+      .filter((line) => !/^\s*(source venv\/bin\/activate|command -v hermes \|\| which hermes \|\| python -c)/.test(line)),
+  );
+
+  const paragraphs = filteredLines
+    .join("\n")
+    .split(/\n{2,}/)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+
+  const dedupedParagraphs: string[] = [];
+  for (const paragraph of paragraphs) {
+    if (dedupedParagraphs[dedupedParagraphs.length - 1] !== paragraph) {
+      dedupedParagraphs.push(paragraph);
+    }
+  }
+
+  return {
+    sessionId,
+    finalText: dedupedParagraphs.join("\n\n").trim(),
+  };
+}
+
+export async function runLocalChat(request: ChatRequest): Promise<ChatResponse> {
+  const commandArgs = buildChatArgs(request);
+  const result = await runHermes(commandArgs);
+  const parsed = normalizeChatOutput(result.stdout);
+  return {
+    ...result,
+    finalText: parsed.finalText || result.stderr || "",
+    sessionId: parsed.sessionId,
+    commandArgs,
+  };
 }
 
 export async function getOverviewData(): Promise<OverviewData> {
