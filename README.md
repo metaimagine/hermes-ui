@@ -26,21 +26,21 @@ Implemented pages:
 - Approvals
 - Chat
 
-## Screenshots
+## Screenshots (English UI)
 
 All screenshots below are intentionally redacted before publishing. Real local paths, personal identifiers, session ids, and account-specific values have been replaced with demo placeholders.
 
 ### Dashboard
 
-![Dashboard screenshot](assets/screenshots/dashboard-redacted.png)
+![Dashboard screenshot](assets/screenshots/dashboard-en-redacted.png)
 
 ### Structured config editor
 
-![Config screenshot](assets/screenshots/config-redacted.png)
+![Config screenshot](assets/screenshots/config-en-redacted.png)
 
 ### Chat workspace
 
-![Chat screenshot](assets/screenshots/chat-redacted.png)
+![Chat screenshot](assets/screenshots/chat-en-redacted.png)
 
 ## Tech stack
 
@@ -100,3 +100,35 @@ This project currently follows these principles:
 - better anomaly explanation and operational severity modeling
 - more complete operator workflows for Cron / Approvals / Memory
 - GitHub release once UI passes repeated audit loops
+
+---
+
+## 中文说明
+
+独立的 Hermes Agent 管理优先 Web UI。
+
+这个项目刻意保持与 Hermes 官方仓库分离，优先服务本地运维/操作者工作台，而不是把聊天做成首页主入口。
+
+当前目标：
+- 管理优先的 Dashboard
+- 结构化配置编辑优先，原始 YAML 作为高级入口
+- 会话浏览与检查
+- Memory / Skills / Cron / Approvals 可视化
+- 中英文 UI
+- 深浅色主题
+
+### 中文界面截图
+
+以下截图在发布前都做了脱敏处理。真实本地路径、个人标识、session id 和账号相关值都已经替换为 demo 占位符。
+
+#### Dashboard
+
+![Dashboard screenshot zh](assets/screenshots/dashboard-zh-redacted.png)
+
+#### 结构化配置页
+
+![Config screenshot zh](assets/screenshots/config-zh-redacted.png)
+
+#### 聊天工作台
+
+![Chat screenshot zh](assets/screenshots/chat-zh-redacted.png)
