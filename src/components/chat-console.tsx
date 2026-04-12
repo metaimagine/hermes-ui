@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { ReactNode } from "react";
 import type { ChatRequest, ChatResponse, SessionRecord } from "@/lib/hermes/types";
@@ -129,7 +130,52 @@ function renderRichMessage(text: string) {
   return blocks.length ? blocks : <p className="rich-paragraph">{text}</p>;
 }
 
+function readArgValue(args: string[] | undefined, flag: string) {
+  if (!args) return undefined;
+  const index = args.indexOf(flag);
+  if (index === -1) return undefined;
+  return args[index + 1];
+}
+
+function getDiagnosticsSummary(turn: ChatTurn) {
+  const provider = readArgValue(turn.commandArgs, "--provider") || "auto";
+  const source = readArgValue(turn.commandArgs, "--source") || "tool";
+  const maxTurns = readArgValue(turn.commandArgs, "--max-turns") || "default";
+  const mode = turn.commandArgs?.includes("--quiet") ? "quiet" : "normal";
+  const session = turn.sessionId || "none";
+  const attachment = turn.commandArgs?.includes("--image") ? "attached" : "none";
+  return { provider, source, maxTurns, mode, session, attachment };
+}
+
+function compactRepeatedResponse(text: string) {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  const paragraphs = normalized.split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
+  const deduped: string[] = [];
+  for (const paragraph of paragraphs) {
+    if (deduped[deduped.length - 1] !== paragraph) {
+      deduped.push(paragraph);
+    }
+  }
+  return deduped.join("\n\n");
+}
+
+function getVisibleAssistantText(text: string) {
+  const compact = compactRepeatedResponse(text);
+  const summaryStart = compact.search(/(简短摘要|一句话|Summary|In short)[:：]/i);
+  const preferred = summaryStart > 0 ? compact.slice(summaryStart).trim() : compact;
+  const limit = 520;
+  if (preferred.length <= limit) {
+    return { preview: preferred, full: compact, truncated: preferred !== compact };
+  }
+  return {
+    preview: `${preferred.slice(0, limit).trimEnd()}…`,
+    full: compact,
+    truncated: true,
+  };
+}
+
 export function ChatConsole({ messages, sessions }: { messages: UiMessages; sessions: SessionRecord[] }) {
+  const searchParams = useSearchParams();
   const [prompt, setPrompt] = useState("");
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [options, setOptions] = useState<ChatOptions>(defaultOptions);
@@ -138,6 +184,7 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
   const [uploadError, setUploadError] = useState<string>("");
   const [isPending, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const hydratedFromQueryRef = useRef(false);
   const t = messages.pages.chat as Record<string, string>;
 
   useEffect(() => {
@@ -147,6 +194,24 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
       }
     };
   }, [uploadedImage]);
+
+  useEffect(() => {
+    if (hydratedFromQueryRef.current) return;
+    const resume = searchParams.get("resume")?.trim();
+    const cont = searchParams.get("continue")?.trim();
+    const promptFromQuery = searchParams.get("prompt")?.trim();
+    if (!resume && !cont && !promptFromQuery) return;
+
+    setOptions((current) => ({
+      ...current,
+      resumeSessionId: resume || current.resumeSessionId,
+      continueSessionName: cont || current.continueSessionName,
+    }));
+    if (promptFromQuery) {
+      setPrompt(promptFromQuery);
+    }
+    hydratedFromQueryRef.current = true;
+  }, [searchParams]);
 
   const examples = useMemo(
     () => [
@@ -407,14 +472,42 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
                   {turn.sessionId ? <span className="tag">session {turn.sessionId}</span> : null}
                   {turn.imagePath ? <span className="tag">image attached</span> : null}
                 </div>
-                <div className="chat-bubble rich-message">{renderRichMessage(turn.text)}</div>
+                <div className="chat-bubble rich-message">
+                  {turn.role === "assistant" ? (() => {
+                    const visible = getVisibleAssistantText(turn.text);
+                    return (
+                      <div className="stack-sm">
+                        <div>{renderRichMessage(visible.preview)}</div>
+                        {visible.truncated ? (
+                          <details className="full-answer-details">
+                            <summary className="advanced-summary">{t.fullAnswerLabel || "完整回答"}</summary>
+                            <div className="advanced-body stack-sm">{renderRichMessage(visible.full)}</div>
+                          </details>
+                        ) : null}
+                      </div>
+                    );
+                  })() : renderRichMessage(turn.text)}
+                </div>
                 {turn.role === "assistant" ? (
                   <details className="turn-diagnostics">
                     <summary className="advanced-summary">{t.turnDiagnostics || "本条 diagnostics"}</summary>
                     <div className="advanced-body stack-sm">
-                      {turn.commandArgs?.length ? <pre className="terminal-block">$ hermes {turn.commandArgs.join(" ")}</pre> : null}
-                      {turn.stdout ? <pre className="terminal-block">{turn.stdout}</pre> : null}
-                      {turn.stderr ? <pre className="terminal-block terminal-error">{turn.stderr}</pre> : null}
+                      <div className="diagnostics-grid">
+                        {Object.entries(getDiagnosticsSummary(turn)).map(([key, value]) => (
+                          <div key={key} className="diagnostic-card">
+                            <div className="diagnostic-label">{key}</div>
+                            <div className="diagnostic-value">{value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <details className="raw-output-details">
+                        <summary className="advanced-summary">{t.rawOutputLabel || "原始输出"}</summary>
+                        <div className="advanced-body stack-sm">
+                          {turn.commandArgs?.length ? <pre className="terminal-block">$ hermes {turn.commandArgs.join(" ")}</pre> : null}
+                          {turn.stdout ? <pre className="terminal-block">{turn.stdout}</pre> : null}
+                          {turn.stderr ? <pre className="terminal-block terminal-error">{turn.stderr}</pre> : null}
+                        </div>
+                      </details>
                     </div>
                   </details>
                 ) : null}
