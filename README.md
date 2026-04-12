@@ -26,6 +26,22 @@ Implemented pages:
 - Approvals
 - Chat
 
+## Screenshots
+
+All screenshots below are intentionally redacted before publishing. Real local paths, personal identifiers, session ids, and account-specific values have been replaced with demo placeholders.
+
+### Dashboard
+
+![Dashboard screenshot](assets/screenshots/dashboard-redacted.png)
+
+### Structured config editor
+
+![Config screenshot](assets/screenshots/config-redacted.png)
+
+### Chat workspace
+
+![Chat screenshot](assets/screenshots/chat-redacted.png)
+
 ## Tech stack
 
 - Next.js
