@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import type { OverviewData } from "@/lib/hermes/types";
 import type { Lang, ThemeMode, UiMessages } from "@/lib/ui/i18n";
 import { PrefsControls } from "@/components/prefs-controls";
-import { Bot, Clock3, LayoutDashboard, MemoryStick, ShieldCheck, SlidersHorizontal, Sparkles, Waypoints, MessageSquareText } from "lucide-react";
+import { Bot, Clock3, LayoutDashboard, MemoryStick, PanelLeftClose, PanelLeftOpen, ShieldCheck, SlidersHorizontal, Sparkles, Waypoints, MessageSquareText } from "lucide-react";
 
 const navKeys = ["dashboard", "config", "sessions", "memory", "skills", "cron", "approvals", "chat"] as const;
 const hrefForKey = {
@@ -62,23 +63,27 @@ export function AppShell({
   messages: UiMessages;
 }) {
   const pathname = usePathname();
+  const isChatPage = pathname === "/chat";
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(isChatPage);
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand-card compact">
-          <div className="brand-eyebrow">{messages.shell.projectEyebrow}</div>
+    <div className={sidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
+      <aside className={sidebarCollapsed ? "sidebar sidebar-collapsed" : "sidebar"}>
+        <div className={sidebarCollapsed ? "brand-card compact drawer-compact" : "brand-card compact"}>
+          {!sidebarCollapsed ? <div className="brand-eyebrow">{messages.shell.projectEyebrow}</div> : null}
           <div className="brand-title-row compact">
             <div className="brand-mark">H</div>
-            <div>
-              <h1>Hermes UI</h1>
-              <p>{messages.shell.productSubtitle}</p>
-            </div>
+            {!sidebarCollapsed ? (
+              <div>
+                <h1>Hermes UI</h1>
+                <p>{messages.shell.productSubtitle}</p>
+              </div>
+            ) : null}
           </div>
-          <div className="brand-pill"><Waypoints size={14} /> {messages.shell.localOnly}</div>
+          {!sidebarCollapsed ? <div className="brand-pill"><Waypoints size={14} /> {messages.shell.localOnly}</div> : null}
         </div>
 
-        <PrefsControls lang={lang} theme={theme} messages={messages} />
+        {!sidebarCollapsed ? <PrefsControls lang={lang} theme={theme} messages={messages} /> : null}
 
         <nav className="nav-list" aria-label="Main navigation">
           {navKeys.map((key) => {
@@ -90,24 +95,31 @@ export function AppShell({
             return (
               <Link key={href} href={href} className={active ? "nav-item active" : "nav-item"}>
                 <div className="nav-icon"><Icon size={18} /></div>
-                <div>
-                  <div className="nav-row-head">
-                    <div className="nav-label">{nav.label}</div>
-                    {badge !== null ? <span className="nav-badge">{badge}</span> : null}
+                {!sidebarCollapsed ? (
+                  <div>
+                    <div className="nav-row-head">
+                      <div className="nav-label">{nav.label}</div>
+                      {badge !== null ? <span className="nav-badge">{badge}</span> : null}
+                    </div>
+                    <div className="nav-short">{nav.short}</div>
                   </div>
-                  <div className="nav-short">{nav.short}</div>
-                </div>
+                ) : badge !== null ? <span className="nav-badge drawer-badge">{badge}</span> : null}
               </Link>
             );
           })}
         </nav>
       </aside>
 
-      <div className="main-shell">
-        <header className="topbar compact">
-          <div>
-            <div className="topbar-eyebrow">{messages.shell.workspaceEyebrow}</div>
-            <div className="topbar-title">{messages.shell.workspaceTitle}</div>
+      <div className={isChatPage ? "main-shell chat-main-shell" : "main-shell"}>
+        <header className={isChatPage ? "topbar compact chat-topbar" : "topbar compact"}>
+          <div className="toolbar-group">
+            <button className="button-secondary drawer-toggle" type="button" onClick={() => setSidebarCollapsed((value) => !value)}>
+              {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+            </button>
+            <div>
+              <div className="topbar-eyebrow">{messages.shell.workspaceEyebrow}</div>
+              <div className="topbar-title">{messages.shell.workspaceTitle}</div>
+            </div>
           </div>
           <div className="topbar-chip-row">
             <div className="topbar-status">
@@ -117,7 +129,7 @@ export function AppShell({
             <div className="topbar-status muted">{messages.shell.noAuth}</div>
           </div>
         </header>
-        <main className="page-frame">{children}</main>
+        <main className={isChatPage ? "page-frame chat-page-frame" : "page-frame"}>{children}</main>
       </div>
     </div>
   );

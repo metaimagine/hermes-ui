@@ -155,8 +155,8 @@ export function SessionsTable({ sessions, messages }: { sessions: SessionRecord[
               <div className="toolbar-group wrap-row">
                 <button className="button-secondary" type="button" onClick={() => navigator.clipboard.writeText(selected.sessionId)}>Copy session_id</button>
                 {selected.originUserId ? <button className="button-secondary" type="button" onClick={() => navigator.clipboard.writeText(selected.originUserId || '')}>Copy user_id</button> : null}
-                <button className="button-secondary" type="button" onClick={() => { window.location.href = `/chat?resume=${encodeURIComponent(selected.sessionId)}`; }}>Open in Chat (resume)</button>
-                <button className="button-secondary" type="button" onClick={() => { window.location.href = `/chat?continue=${encodeURIComponent(selected.displayName || selected.originUserId || selected.sessionId)}`; }}>Open in Chat (continue)</button>
+                <button className="button-secondary" type="button" onClick={() => { window.location.href = `/chat?resume=${encodeURIComponent(selected.sessionId)}&prompt=${encodeURIComponent('Summarize this session and tell me the safest next step.')}`; }}>Open in Chat (resume)</button>
+                <button className="button-secondary" type="button" onClick={() => { window.location.href = `/chat?continue=${encodeURIComponent(selected.displayName || selected.originUserId || selected.sessionId)}&prompt=${encodeURIComponent('Continue this conversation and propose the next action.')}`; }}>Open in Chat (continue)</button>
               </div>
             </>
           ) : (

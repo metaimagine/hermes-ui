@@ -15,6 +15,8 @@ import type {
   SkillsSnapshot,
   ChatRequest,
   ChatResponse,
+  ChatHistorySnapshot,
+  ChatHistoryTurn,
 } from "./types";
 
 type SessionIndexEntry = {
@@ -325,6 +327,49 @@ function normalizeChatOutput(stdout: string) {
     sessionId,
     finalText: dedupedParagraphs.join("\n\n").trim(),
   };
+}
+
+function coerceTurnRole(role: unknown): "user" | "assistant" | null {
+  if (role === "user" || role === "assistant") return role;
+  if (role === "system" || role === "tool") return null;
+  return null;
+}
+
+function extractTurnText(message: Record<string, unknown>) {
+  if (typeof message.content === "string") return message.content;
+  if (Array.isArray(message.content)) {
+    return message.content
+      .map((item) => (item && typeof item === "object" && typeof (item as Record<string, unknown>).text === "string" ? (item as Record<string, unknown>).text : ""))
+      .filter(Boolean)
+      .join("\n\n");
+  }
+  return "";
+}
+
+export async function getChatHistory(sessionId: string): Promise<ChatHistorySnapshot> {
+  const filePath = path.join(HERMES_HOME, "sessions", `session_${sessionId}.json`);
+  const data = await readJson<Record<string, unknown>>(filePath, {});
+  const messages = Array.isArray(data.messages) ? data.messages : [];
+  const rawTurns: Array<ChatHistoryTurn | null> = messages.map((message, index) => {
+    if (!message || typeof message !== "object") return null;
+    const row = message as Record<string, unknown>;
+    const role = coerceTurnRole(row.role);
+    if (!role) return null;
+    const text = extractTurnText(row).trim();
+    if (!text) return null;
+    return {
+      id: `${sessionId}-${index}`,
+      role,
+      text,
+      createdAt: typeof row.timestamp === "string" ? row.timestamp : undefined,
+      sessionId,
+      source: "session-file" as const,
+    };
+  });
+
+  const turns = rawTurns.filter((turn): turn is ChatHistoryTurn => turn !== null);
+
+  return { sessionId, turns };
 }
 
 export async function runLocalChat(request: ChatRequest): Promise<ChatResponse> {

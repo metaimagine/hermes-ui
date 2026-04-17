@@ -117,3 +117,17 @@ export type ChatResponse = {
   sessionId?: string;
   commandArgs: string[];
 };
+
+export type ChatHistoryTurn = {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  createdAt?: string;
+  sessionId: string;
+  source: "session-file";
+};
+
+export type ChatHistorySnapshot = {
+  sessionId: string;
+  turns: ChatHistoryTurn[];
+};
