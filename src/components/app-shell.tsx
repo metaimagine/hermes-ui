@@ -148,11 +148,11 @@ export function AppShell({
             </div>
           </div>
           <div className="topbar-chip-row">
-            <div className="topbar-status">
-              <span className="status-dot" />
+            <div className={isChatPage ? "topbar-status muted" : "topbar-status"}>
+              {!isChatPage ? <span className="status-dot" /> : null}
               {messages.shell.backendRoutes}
             </div>
-            <div className="topbar-status muted">{messages.shell.noAuth}</div>
+            {!isChatPage ? <div className="topbar-status muted">{messages.shell.noAuth}</div> : null}
           </div>
         </header>
         <main className={isChatPage ? "page-frame chat-page-frame" : "page-frame"}>{children}</main>
