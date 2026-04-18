@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { OverviewData } from "@/lib/hermes/types";
 import type { Lang, ThemeMode, UiMessages } from "@/lib/ui/i18n";
 import { PrefsControls } from "@/components/prefs-controls";
@@ -64,7 +64,25 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const isChatPage = pathname === "/chat";
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(isChatPage);
+  const drawerToggleLabel = sidebarCollapsed
+    ? (lang === "zh" ? "展开侧边栏" : "Open sidebar")
+    : (lang === "zh" ? "收起侧边栏" : "Collapse sidebar");
+  const drawerDismissLabel = lang === "zh" ? "关闭侧边栏" : "Close sidebar";
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1160px)");
+    const syncShellState = () => {
+      const compact = media.matches;
+      setIsCompactViewport(compact);
+      setSidebarCollapsed(compact || pathname === "/chat");
+    };
+
+    syncShellState();
+    media.addEventListener("change", syncShellState);
+    return () => media.removeEventListener("change", syncShellState);
+  }, [pathname]);
 
   return (
     <div className={sidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
@@ -109,11 +127,19 @@ export function AppShell({
           })}
         </nav>
       </aside>
+      {isCompactViewport ? (
+        <button
+          type="button"
+          className={sidebarCollapsed ? "drawer-backdrop" : "drawer-backdrop visible"}
+          aria-label={drawerDismissLabel}
+          onClick={() => setSidebarCollapsed(true)}
+        />
+      ) : null}
 
       <div className={isChatPage ? "main-shell chat-main-shell" : "main-shell"}>
         <header className={isChatPage ? "topbar compact chat-topbar" : "topbar compact"}>
           <div className="toolbar-group">
-            <button className="button-secondary drawer-toggle" type="button" onClick={() => setSidebarCollapsed((value) => !value)}>
+            <button className="button-secondary drawer-toggle" type="button" aria-label={drawerToggleLabel} onClick={() => setSidebarCollapsed((value) => !value)}>
               {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
             </button>
             <div>

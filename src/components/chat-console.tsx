@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { ReactNode } from "react";
+import { ArrowUp, Check, Copy, History, Mic, Paperclip, Plus, SlidersHorizontal, Sparkles } from "lucide-react";
 import type { ChatHistorySnapshot, ChatRequest, ChatResponse, SessionRecord } from "@/lib/hermes/types";
 import type { UiMessages } from "@/lib/ui/i18n";
 
@@ -205,12 +206,20 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
   const latestTurnRef = useRef<HTMLDivElement | null>(null);
   const hydratedFromQueryRef = useRef(false);
+  const recentSessionsRef = useRef<HTMLDetailsElement | null>(null);
+  const activeContextRef = useRef<HTMLDetailsElement | null>(null);
+  const advancedOptionsRef = useRef<HTMLDetailsElement | null>(null);
+  const copyFeedbackTimeoutRef = useRef<number | null>(null);
+  const [copiedTurnId, setCopiedTurnId] = useState<string | null>(null);
   const t = messages.pages.chat as Record<string, string>;
 
   useEffect(() => {
     return () => {
       if (uploadedImage?.previewUrl) {
         URL.revokeObjectURL(uploadedImage.previewUrl);
+      }
+      if (copyFeedbackTimeoutRef.current) {
+        window.clearTimeout(copyFeedbackTimeoutRef.current);
       }
     };
   }, [uploadedImage]);
@@ -322,8 +331,8 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
 
   const contextSummary = useMemo(() => {
     const parts: string[] = [];
-    parts.push(`${t.resumeLabel || "resume"}: ${options.resumeSessionId?.trim() || (t.noneValue || "none")}`);
-    parts.push(`${t.continueLabel || "continue"}: ${options.continueSessionName?.trim() || (t.noneValue || "none")}`);
+    parts.push(`${t.resumeLabel || "resume"}: ${options.resumeSessionId?.trim() ? truncateMiddle(options.resumeSessionId.trim(), 10) : (t.noneValue || "none")}`);
+    parts.push(`${t.continueLabel || "continue"}: ${options.continueSessionName?.trim() ? truncateMiddle(options.continueSessionName.trim(), 10) : (t.noneValue || "none")}`);
     parts.push(`${t.providerLabel || "provider"}: ${options.provider?.trim() || "auto"}`);
     parts.push(`${t.sourceLabel || "source"}: ${options.source?.trim() || "tool"}`);
     parts.push(`${t.attachmentLabel || "attachment"}: ${uploadedImage?.localName || (t.noneValue || "none")}`);
@@ -379,6 +388,41 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
 
   function clearTranscript() {
     setTurns([]);
+  }
+
+  function startFreshChat() {
+    clearTranscript();
+    clearUploadedImage();
+    setPrompt("");
+    setHydratedSessionId(null);
+    setOptions((current) => ({
+      ...current,
+      resumeSessionId: undefined,
+      continueSessionName: undefined,
+      imagePath: undefined,
+    }));
+  }
+
+  function openDetail(ref: React.RefObject<HTMLDetailsElement | null>) {
+    if (!ref.current) return;
+    ref.current.open = true;
+    ref.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  async function copyTurnText(turnId: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedTurnId(turnId);
+      if (copyFeedbackTimeoutRef.current) {
+        window.clearTimeout(copyFeedbackTimeoutRef.current);
+      }
+      copyFeedbackTimeoutRef.current = window.setTimeout(() => {
+        setCopiedTurnId(null);
+        copyFeedbackTimeoutRef.current = null;
+      }, 1400);
+    } catch {
+      setCopiedTurnId(null);
+    }
   }
 
   function clearUploadedImage() {
@@ -483,41 +527,59 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
     };
 
     setTurns((current) => [...current, userTurn]);
+    setIsAutoScrolling(true);
     setPrompt("");
 
     const requestOptions = { ...options };
 
-    startTransition(async () => {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: trimmed, ...requestOptions }),
-      });
+    startTransition(() => {
+      void (async () => {
+        try {
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: trimmed, ...requestOptions }),
+          });
 
-      const data = (await response.json()) as ChatResponse & { error?: string };
-      const normalized: ChatResponse = {
-        stdout: data.stdout || data.error || "",
-        stderr: data.stderr || "",
-        exitCode: data.exitCode ?? (response.ok ? 0 : 1),
-        finalText: data.finalText || data.stdout || data.error || "",
-        sessionId: data.sessionId,
-        commandArgs: data.commandArgs || [],
-      };
+          const data = (await response.json()) as ChatResponse & { error?: string };
+          const normalized: ChatResponse = {
+            stdout: data.stdout || data.error || "",
+            stderr: data.stderr || "",
+            exitCode: data.exitCode ?? (response.ok ? 0 : 1),
+            finalText: data.finalText || data.stdout || data.error || "",
+            sessionId: data.sessionId,
+            commandArgs: data.commandArgs || [],
+          };
 
-      setTurns((current) => [
-        ...current,
-        {
-          id: makeId(),
-          role: "assistant",
-          text: normalized.finalText || normalized.stderr || t.noOutput,
-          createdAt: new Date().toISOString(),
-          exitCode: normalized.exitCode,
-          sessionId: normalized.sessionId,
-          stderr: normalized.stderr,
-          stdout: normalized.stdout,
-          commandArgs: normalized.commandArgs,
-        },
-      ]);
+          setTurns((current) => [
+            ...current,
+            {
+              id: makeId(),
+              role: "assistant",
+              text: normalized.finalText || normalized.stderr || t.noOutput,
+              createdAt: new Date().toISOString(),
+              exitCode: normalized.exitCode,
+              sessionId: normalized.sessionId,
+              stderr: normalized.stderr,
+              stdout: normalized.stdout,
+              commandArgs: normalized.commandArgs,
+            },
+          ]);
+        } catch (error) {
+          setTurns((current) => [
+            ...current,
+            {
+              id: makeId(),
+              role: "assistant",
+              text: error instanceof Error ? error.message : (t.noOutput || "No output yet."),
+              createdAt: new Date().toISOString(),
+              exitCode: 1,
+            },
+          ]);
+        } finally {
+          setIsAutoScrolling(true);
+        }
+      })();
     });
 
     if (uploadedImage) {
@@ -531,7 +593,7 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
   }
 
   return (
-    <div className="stack-md chat-console-layout">
+    <div className="stack-md chat-console-layout chat-reference-layout">
       <section className="card card-pad compact-chat-header context-strip-card stack-sm">
         <div className="toolbar compact-top-row context-strip-row">
           <div className="stack-xs">
@@ -541,7 +603,26 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
               <span className="pill">{sessions.length} recent</span>
             </div>
           </div>
-          <details className="chat-utility-details utility-inline-details">
+          <div className="chat-control-row">
+            <button className="button-secondary chat-control-button" type="button" onClick={() => openDetail(recentSessionsRef)} disabled={!sessions.length}>
+              <History size={15} />
+              {t.recentSessionsTitle || "最近会话"}
+            </button>
+            <button className="button-secondary chat-control-button" type="button" onClick={() => openDetail(activeContextRef)} disabled={!activeOptionPills.length}>
+              <SlidersHorizontal size={15} />
+              {t.contextAction || t.contextTitle || "当前上下文"}
+            </button>
+            <button className="button-secondary chat-control-button" type="button" onClick={() => openDetail(advancedOptionsRef)}>
+              <Sparkles size={15} />
+              {t.advancedAction || t.advancedOptions || "高级"}
+            </button>
+            <button className="button-secondary chat-control-button chat-control-button-strong" type="button" onClick={startFreshChat}>
+              <Plus size={15} />
+              {t.newChat || "新对话"}
+            </button>
+          </div>
+        </div>
+        <details ref={recentSessionsRef} className="chat-utility-details utility-inline-details">
             <summary className="advanced-summary">{t.recentSessionsTitle || "最近会话"}</summary>
             <div className="advanced-body stack-sm">
               <div className="inline-note">{t.sessionActionHelp || "恢复 = 按 session_id 精确恢复；续接 = 用 continue 名称/身份继续最近上下文。"}</div>
@@ -563,13 +644,12 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
               }) : <div className="empty-state">{t.noRecentSessions || "没有读到最近会话。"}</div>}
             </div>
           </details>
-        </div>
         <div className="tag-row context-strip-tags">
           {contextSummary.map((item) => <span key={item} className="tag">{item}</span>)}
         </div>
       </section>
 
-      <section className="card card-pad chat-surface stack-md">
+      <section className="chat-surface chat-reference-surface stack-md">
         <div className="row-between compact-top-row transcript-head-row">
           <div className="stack-xs">
             <h3 className="section-title">{t.transcriptTitle || "对话转录"}</h3>
@@ -584,7 +664,7 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
         </div>
 
         {activeOptionPills.length ? (
-          <details className="chat-meta-details">
+          <details ref={activeContextRef} className="chat-meta-details">
             <summary className="advanced-summary">{t.contextTitle || "当前上下文"} · {activeOptionPills.length}</summary>
             <div className="advanced-body tag-row chat-surface-pills">
               {activeOptionPills.map((pill) => (
@@ -650,6 +730,14 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
                         ) : null}
                         {!isResumeTail && turn.sessionId ? <span className="tag">session {turn.sessionId}</span> : null}
                         {!isResumeTail && turn.imagePath ? <span className="tag">image attached</span> : null}
+                        {!isResumeTail && turn.role === "assistant" ? (
+                          <div className="chat-inline-actions">
+                            <button className="button-secondary chat-inline-button" type="button" onClick={() => copyTurnText(turn.id, turn.text)}>
+                              {copiedTurnId === turn.id ? <Check size={13} /> : <Copy size={13} />}
+                              {copiedTurnId === turn.id ? (t.copiedAction || "已复制") : (t.copyAction || "复制")}
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                       <div className={`chat-bubble rich-message ${isResumeTail ? "chat-bubble-live-tail" : ""}`}>
                         {isContinuationAnchor ? (
@@ -704,7 +792,7 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
             </div>
           )}
 
-          <form className="chat-composer-dock stack-md" onSubmit={onSubmit}>
+          <form className="chat-composer-dock chat-floating-dock stack-md" onSubmit={onSubmit}>
             <div className="chat-composer-head">
               <div>
                 <div className="section-title">{t.consoleTitle}</div>
@@ -728,6 +816,7 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
 
               <textarea
                 className="composer composer-codex"
+                aria-label={t.consoleTitle || "Local Hermes CLI prompt"}
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
                 onKeyDown={(event) => {
@@ -748,11 +837,26 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
               </div>
 
               <div className="composer-toolbar composer-toolbar-codex">
+                <div className="composer-toolbar-left">
+                  <div className="composer-mode-pill">
+                    <Sparkles size={14} />
+                    {`${t.sourceLabel || "source"}: ${options.source || "tool"}`}
+                  </div>
+                </div>
                 <div className="toolbar-group wrap-row toolbar-cluster-right">
                   <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden-input" onChange={handlePickImage} />
-                  <button className="button-secondary" type="button" onClick={() => fileInputRef.current?.click()}>{t.pickImage || "选择图片"}</button>
-                  <button className={isListening ? "button-secondary active-control" : "button-secondary"} type="button" onClick={toggleVoiceInput}>{isListening ? (t.stopVoice || "停止录音") : (t.voiceInput || "语音录入")}</button>
-                  <button className="button-primary" disabled={isPending}>{isPending ? t.running : t.send}</button>
+                  <button className="button-secondary composer-control-button" type="button" onClick={() => fileInputRef.current?.click()}>
+                    <Paperclip size={15} />
+                    {t.pickImage || "选择图片"}
+                  </button>
+                  <button className={isListening ? "button-secondary composer-control-button active-control" : "button-secondary composer-control-button"} type="button" onClick={toggleVoiceInput}>
+                    <Mic size={15} />
+                    {isListening ? (t.stopVoice || "停止录音") : (t.voiceInput || "语音录入")}
+                  </button>
+                  <button className="button-primary composer-send-button" disabled={isPending}>
+                    <ArrowUp size={15} />
+                    {isPending ? t.running : t.send}
+                  </button>
                 </div>
               </div>
             </div>
@@ -765,7 +869,7 @@ export function ChatConsole({ messages, sessions }: { messages: UiMessages; sess
               {voiceError ? <div className="inline-note warn-text">{voiceError}</div> : null}
             </div>
 
-            <details className="card advanced-config chat-advanced-config">
+            <details ref={advancedOptionsRef} className="card advanced-config chat-advanced-config">
               <summary className="advanced-summary">{t.advancedOptions || "高级 CLI 选项"} · {t.advancedOptionsHint || "session / provider / debug"}</summary>
               <div className="advanced-body stack-md">
                 <div className="form-section-grid">
